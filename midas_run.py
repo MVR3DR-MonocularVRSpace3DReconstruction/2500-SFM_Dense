@@ -3,7 +3,7 @@
 import os
 import glob
 import torch
-import utils
+import MiDaS.utils
 import cv2
 import argparse
 
@@ -110,7 +110,7 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
 
         # input
 
-        img = utils.read_image(img_name)
+        img = MiDaS.utils.read_image(img_name)
         img_input = transform({"image": img})["image"]
 
         # compute
@@ -136,7 +136,7 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
         filename = os.path.join(
             output_path, os.path.splitext(os.path.basename(img_name))[0]
         )
-        utils.write_depth(filename, prediction, bits=2)
+        MiDaS.utils.write_depth(filename, prediction, bits=2)
 
     print("finished")
 

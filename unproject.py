@@ -1,19 +1,18 @@
-
-
-
 import cv2
 import os
 import json
 import math
+import glob
 import numpy as np
 from copy import deepcopy
 import open3d as o3d
-import open3d.visualization as vis
 import pycolmap
 
+from pathlib import Path
 # import matplotlib.pyplot as plt
 from PIL import Image
 import rtvec2extrinsic
+
 
 debug = True
 ###############################################
@@ -60,7 +59,7 @@ def init_colmap_pointcloud(data_dir, debug):
         if debug:
             camera_linesets.append(cam)
     if debug:
-        vis.draw_geometries([pcd, *camera_linesets])
+        o3d.visualization.draw_geometries([pcd, *camera_linesets])
         
     return pcd, images, cameras, img_width, img_height
 
@@ -102,7 +101,52 @@ def dark2alpha(img):
     img_out = cv2.merge(rgba, 4)
     return img_out
 
+def unproject_fusion_mapping(data_dir, debug):
+    fusion_dir = Path("{}/unproject_fusion".format(data_dir))
+    depth_dir = Path("{}/unproject_depth".format(data_dir))
+    unproject_dir = Path("{}/unproject_colors".format(data_dir))
+    fusion_dir.mkdir(parents=True, exist_ok=True)
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    unproject_dir.mkdir(parents=True, exist_ok=True)
 
+    images_dir = glob.glob(data_dir+"/undistorted/images/*.jpg")
+    
+    pcd, images, cameras, img_width, img_height = init_colmap_pointcloud(data_dir, debug)
+    
+    mat = o3d.visualization.rendering.MaterialRecord()
+    mat.shader = 'defaultUnlit'
+    renderer_pc = o3d.visualization.rendering.OffscreenRenderer(img_width, img_height)
+    renderer_pc.scene.set_background(np.array([0, 0, 0, 0]))
+    renderer_pc.scene.add_geometry("pcd", pcd, mat)
+    for img_path in images_dir:
+        
+        img_name = img_path.split("/")[-1]
+        print("=> Load image: {}".format(img_name))
+        img_idx = [ key for key, value in images.items() if value["name"] == img_name]
+        assert len(img_idx) == 1
+        img_idx = img_idx[0]
+        renderer_pc.setup_camera(
+            cameras[images[img_idx]["cam_id"]]["intrinsic"], 
+            np.linalg.inv(images[img_idx]["extrinsic"]), 
+            img_width, img_height)
+        
+        depth_image = np.asarray(renderer_pc.render_to_depth_image())
+        color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
+        depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
+        # depth_image = depth_image * 255
+        img_name = img_name.split(".")[0]
+        
+        np.save(str(depth_dir/"depth_{}".format(img_name)), depth_image)
+        cv2.imwrite(str(depth_dir/"{}.png".format(img_name)), depth_image)
+        cv2.imwrite(str(depth_dir/"view_{}.png".format(img_name)), depth_view)
+        cv2.imwrite(str(unproject_dir/"{}.png".format(img_name)), color_image)
+
+        origin_image = cv2.imread(data_dir+"images/"+images[img_idx]["name"])
+        overlay_image = dark2alpha(color_image)
+        fusion_image = merge_image(origin_image, overlay_image, 0, 0)
+
+        cv2.imwrite(str(fusion_dir/"fusion_{}.png".format(img_name)), fusion_image)
+        
 ###############################################
 # Back to Point cloud
 ###############################################
