@@ -1,3 +1,6 @@
 [submodule "MiDaS"]
 	path = MiDaS
 	url = https://github.com/isl-org/MiDaS.git
+[submodule "OpenSfM"]
+	path = OpenSfM
+	url = https://github.com/mapillary/OpenSfM.git
