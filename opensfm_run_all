@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -e
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+"$DIR"/OpenSfM/bin/opensfm extract_metadata "$1"
+"$DIR"/OpenSfM/bin/opensfm detect_features "$1"
+"$DIR"/OpenSfM/bin/opensfm match_features "$1"
+
+"$DIR"/OpenSfM/bin/opensfm create_tracks "$1"
+"$DIR"/OpenSfM/bin/opensfm reconstruct "$1"
+"$DIR"/OpenSfM/bin/opensfm mesh "$1"
+"$DIR"/OpenSfM/bin/opensfm undistort "$1"
+"$DIR"/OpenSfM/bin/opensfm compute_depthmaps "$1"
+
+# "$DIR"/OpenSfM/bin/opensfm export_ply "$1"
+"$DIR"/OpenSfM/bin/opensfm export_colmap "$1"
+"$DIR"/OpenSfM/bin/opensfm export_openmvs "$1"
+
+
+# "$DIR"/OpenSfM/bin/opensfm create_submodels "$1"
+
+# "$DIR"/OpenSfM/bin/opensfm create_tracks "$1/submodels/submodel_XXXX"
+# "$DIR"/OpenSfM/bin/opensfm reconstruct "$1/submodels/submodel_XXXX"
+# "$DIR"/OpenSfM/bin/opensfm mesh "$1/submodels/submodel_XXXX"
+# "$DIR"/OpenSfM/bin/opensfm undistort "$1/submodels/submodel_XXXX"
+# "$DIR"/OpenSfM/bin/opensfm compute_depthmaps "$1/submodels/submodel_XXXX"
+
+# "$DIR"/OpenSfM/bin/opensfm align_submodels "$1"
+
+

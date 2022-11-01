@@ -19,46 +19,50 @@ debug = True
 ###############################################
 # Read Colmap & Point cloud
 ###############################################
-data_dir = "data/LAB410/"
-pcd_path = data_dir+"undistorted/openmvs/scene_dense.ply"
-colmap_path = data_dir+"colmap_export"
-pcd = o3d.io.read_point_cloud(pcd_path)
-colmap = pycolmap.Reconstruction(colmap_path)
-print(colmap.summary())
 
-img_width, img_height = (-1, -1)
-cameras = {}
-for camera in colmap.cameras.values():
-    # print(camera.camera_id)
-    dict_camera = {}
-    dict_camera["lineset"] = o3d.geometry.LineSet.create_camera_visualization(
-        camera.width, camera.height, camera.calibration_matrix(), np.identity(4), scale=1)
-    dict_camera["intrinsic"] = camera.calibration_matrix()
-    cameras[camera.camera_id] = dict_camera
-    img_width, img_height = (camera.width, camera.height)
+def init_colmap_pointcloud(data_dir, debug):
+    
+    pcd_path = data_dir+"undistorted/openmvs/scene_dense.ply"
+    colmap_path = data_dir+"colmap_export"
+    pcd = o3d.io.read_point_cloud(pcd_path)
+    colmap = pycolmap.Reconstruction(colmap_path)
+    print(colmap.summary())
 
-print("Intrinsic:\n", cameras[1]["intrinsic"])
-images = {}
-if debug:
-    camera_linesets = []
-for image in colmap.images.values():
-    dict_image = {}
-    
-    T = np.eye(4)
-    T[:3, :4] = image.inverse_projection_matrix()
-    
-    cam = deepcopy(cameras[image.camera_id]["lineset"]).transform(T)
-    cam.paint_uniform_color([1.0, 0.0, 0.0])  # red
-    
-    dict_image["extrinsic"] = T
-    dict_image["name"] = image.name
-    dict_image["lineset"] = cam
-    dict_image["cam_id"] = image.camera_id
-    images[image.image_id] = dict_image
+    img_width, img_height = (-1, -1)
+    cameras = {}
+    for camera in colmap.cameras.values():
+        # print(camera.camera_id)
+        dict_camera = {}
+        dict_camera["lineset"] = o3d.geometry.LineSet.create_camera_visualization(
+            camera.width, camera.height, camera.calibration_matrix(), np.identity(4), scale=1)
+        dict_camera["intrinsic"] = camera.calibration_matrix()
+        cameras[camera.camera_id] = dict_camera
+        img_width, img_height = (camera.width, camera.height)
+
+    print("Intrinsic:\n", cameras[1]["intrinsic"])
+    images = {}
     if debug:
-        camera_linesets.append(cam)
-if debug:
-    vis.draw_geometries([pcd, *camera_linesets])
+        camera_linesets = []
+    for image in colmap.images.values():
+        dict_image = {}
+        
+        T = np.eye(4)
+        T[:3, :4] = image.inverse_projection_matrix()
+        
+        cam = deepcopy(cameras[image.camera_id]["lineset"]).transform(T)
+        cam.paint_uniform_color([1.0, 0.0, 0.0])  # red
+        
+        dict_image["extrinsic"] = T
+        dict_image["name"] = image.name
+        dict_image["lineset"] = cam
+        dict_image["cam_id"] = image.camera_id
+        images[image.image_id] = dict_image
+        if debug:
+            camera_linesets.append(cam)
+    if debug:
+        vis.draw_geometries([pcd, *camera_linesets])
+        
+    return pcd, images, cameras, img_width, img_height
 
 ###############################################
 # Render Depth & Colors
@@ -98,35 +102,42 @@ def dark2alpha(img):
     img_out = cv2.merge(rgba, 4)
     return img_out
 
-image_idx = 35
-print("Image file: ", images[image_idx]["name"])
-mat = o3d.visualization.rendering.MaterialRecord()
-mat.shader = 'defaultUnlit'
-
-renderer_pc = o3d.visualization.rendering.OffscreenRenderer(img_width, img_height)
-renderer_pc.scene.set_background(np.array([0, 0, 0, 0]))
-renderer_pc.scene.add_geometry("pcd", pcd, mat)
-renderer_pc.setup_camera(
-    cameras[images[image_idx]["cam_id"]]["intrinsic"], 
-    np.linalg.inv(images[image_idx]["extrinsic"]), 
-    img_width, img_height)
-
-depth_image = np.asarray(renderer_pc.render_to_depth_image())
-color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
-depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
-# depth_image = depth_image * 255
-np.save('depth', depth_image)
-cv2.imwrite("depth.png", depth_image)
-cv2.imwrite("depth_view.png", depth_view)
-cv2.imwrite("color.png", color_image)
-
-origin_image = cv2.imread(data_dir+"images/"+images[image_idx]["name"])
-overlay_image = dark2alpha(color_image)
-fusion_image = merge_image(origin_image, overlay_image, 0, 0)
-
-cv2.imwrite("fusion.png", fusion_image)
 
 ###############################################
 # Back to Point cloud
 ###############################################
 
+
+
+if __name__ == "__main__":
+    data_dir = "inputs/sample/"
+    image_idx = 35
+    
+    pcd, images, cameras, img_width, img_height = init_colmap_pointcloud(data_dir, True)
+    
+    print("Image file: ", images[image_idx]["name"])
+    mat = o3d.visualization.rendering.MaterialRecord()
+    mat.shader = 'defaultUnlit'
+
+    renderer_pc = o3d.visualization.rendering.OffscreenRenderer(img_width, img_height)
+    renderer_pc.scene.set_background(np.array([0, 0, 0, 0]))
+    renderer_pc.scene.add_geometry("pcd", pcd, mat)
+    renderer_pc.setup_camera(
+        cameras[images[image_idx]["cam_id"]]["intrinsic"], 
+        np.linalg.inv(images[image_idx]["extrinsic"]), 
+        img_width, img_height)
+
+    depth_image = np.asarray(renderer_pc.render_to_depth_image())
+    color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
+    depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
+    # depth_image = depth_image * 255
+    np.save('depth', depth_image)
+    cv2.imwrite("depth.png", depth_image)
+    cv2.imwrite("depth_view.png", depth_view)
+    cv2.imwrite("color.png", color_image)
+
+    origin_image = cv2.imread(data_dir+"images/"+images[image_idx]["name"])
+    overlay_image = dark2alpha(color_image)
+    fusion_image = merge_image(origin_image, overlay_image, 0, 0)
+
+    cv2.imwrite("fusion.png", fusion_image)
