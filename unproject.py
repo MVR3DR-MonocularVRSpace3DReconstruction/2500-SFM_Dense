@@ -130,15 +130,13 @@ def unproject_fusion_mapping(data_dir, debug):
             np.linalg.inv(images[img_idx]["extrinsic"]), 
             img_width, img_height)
         
-        depth_image = np.asarray(renderer_pc.render_to_depth_image())
+        depth_image = np.asarray(renderer_pc.render_to_depth_image(True))
         color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
-        depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
         # depth_image = depth_image * 255
         img_name = img_name.split(".")[0]
         
         np.save(str(depth_dir/"depth_{}".format(img_name)), depth_image)
         cv2.imwrite(str(depth_dir/"{}.png".format(img_name)), depth_image)
-        cv2.imwrite(str(depth_dir/"view_{}.png".format(img_name)), depth_view)
         cv2.imwrite(str(unproject_dir/"{}.png".format(img_name)), color_image)
 
         origin_image = cv2.imread(data_dir+"images/"+images[img_idx]["name"])

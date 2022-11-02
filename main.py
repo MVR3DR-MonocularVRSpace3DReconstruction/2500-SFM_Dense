@@ -99,6 +99,16 @@ def run(args):
         print("====================================")
         print("- Midas Predict       %s" % datetime.timedelta(seconds=times[3]))
 
+    
+    if int(enabled_module) <= 4:
+        start_time = time.time()
+        print("\n\n=> Midas Predicting...")
+        
+        times[4] = time.time() - start_time
+        print("====================================")
+        print("Midas Predict")
+        print("====================================")
+        print("- Midas Predict       %s" % datetime.timedelta(seconds=times[4]))
 
 def str2bool(v):
     if isinstance(v, bool):

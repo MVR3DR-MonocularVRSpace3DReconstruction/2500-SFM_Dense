@@ -6,6 +6,7 @@ import torch
 import MiDaS.utils
 import cv2
 import argparse
+import numpy as np
 
 from torchvision.transforms import Compose
 from MiDaS.midas.dpt_depth import DPTDepthModel
@@ -131,7 +132,7 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
                 .cpu()
                 .numpy()
             )
-
+        # prediction = np.array([[ 255-pix if pix != 0 else 0 for pix in row] for row in prediction])
         # output
         filename = os.path.join(
             output_path, os.path.splitext(os.path.basename(img_name))[0]
