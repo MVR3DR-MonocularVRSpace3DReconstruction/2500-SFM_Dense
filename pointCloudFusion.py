@@ -3,6 +3,7 @@ import glob
 import open3d as o3d
 import numpy as np
 
+import matplotlib.pyplot as plt
 from unproject import init_colmap_pointcloud
 
 def read_rgbd_image(color_file, depth_file, depth_trunc=1000, convert_rgb_to_intensity=False):
@@ -13,6 +14,14 @@ def read_rgbd_image(color_file, depth_file, depth_trunc=1000, convert_rgb_to_int
         depth,
         depth_trunc=depth_trunc,
         convert_rgb_to_intensity=convert_rgb_to_intensity)
+    if True:
+        plt.subplot(1, 2, 1)
+        plt.title('Redwood grayscale image')
+        plt.imshow(rgbd_image.color)
+        plt.subplot(1, 2, 2)
+        plt.title('Redwood depth image')
+        plt.imshow(rgbd_image.depth)
+        plt.show()
     return rgbd_image
 
 def generate_point_cloud(image_dir:str, depth_dir:str, intrinsicM=None, extrinsicM=None, flip=False):
@@ -38,5 +47,5 @@ scene, images, cameras, img_width, img_height = init_colmap_pointcloud("inputs/s
 
 pcd = generate_point_cloud("c.jpg", "d.png", cameras[images["91730.jpg"]["cam_id"]]["intrinsic"])
 pcdo = generate_point_cloud("c.jpg", "a.png", cameras[images["91730.jpg"]["cam_id"]]["intrinsic"])
-# pcd.paint_uniform_color([1,0,0])
-o3d.visualization.draw_geometries([pcdo])
+pcd.paint_uniform_color([1,0,0])
+o3d.visualization.draw_geometries([pcd, pcdo])

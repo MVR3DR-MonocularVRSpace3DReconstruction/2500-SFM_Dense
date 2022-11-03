@@ -1,4 +1,5 @@
 import cv2
+from PIL import Image
 import os
 import json
 import math
@@ -111,14 +112,24 @@ def dark2alpha(img):
     return img_out
 
 def unproject_fusion_mapping(data_dir, debug):
-    fusion_dir = Path("{}/unproject_fusion".format(data_dir))
+    """unproject the depth map from pointcloud and colmap camera path
+
+    Args:
+        data_dir (str): input data path
+        debug (bool): show debug options
+    
+    Returns:
+        depth map in data_dir/unproject_depth/
+        color map in data_dir/unproject_colors/
+    """
+    # fusion_dir = Path("{}/unproject_fusion".format(data_dir))
     depth_dir = Path("{}/unproject_depth".format(data_dir))
     unproject_dir = Path("{}/unproject_colors".format(data_dir))
-    fusion_dir.mkdir(parents=True, exist_ok=True)
+    # fusion_dir.mkdir(parents=True, exist_ok=True)
     depth_dir.mkdir(parents=True, exist_ok=True)
     unproject_dir.mkdir(parents=True, exist_ok=True)
 
-    images_dir = glob.glob(data_dir+"/undistorted/images/*.jpg")
+    images_dir = sorted(glob.glob(data_dir+"/undistorted/images/*.jpg"))
     
     pcd, images, cameras, img_width, img_height = init_colmap_pointcloud(data_dir, debug)
     
@@ -136,21 +147,28 @@ def unproject_fusion_mapping(data_dir, debug):
             np.linalg.inv(images[img_name_ext]["extrinsic"]), 
             img_width, img_height)
         
-        depth_image = np.asarray(renderer_pc.render_to_depth_image(True))
-        color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
-        # depth_image = depth_image * 255
+        # depth_image = np.asarray(renderer_pc.render_to_depth_image(True))
+        # color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
+        depth_image = renderer_pc.render_to_depth_image(True)
+        depth_image = np.array(depth_image)
+        
+        color_image = renderer_pc.render_to_image()
         img_name = img_name_ext.split(".")[0]
-        
-        np.save(str(depth_dir/"depth_{}".format(img_name)), depth_image)
-        cv2.imwrite(str(depth_dir/"{}.png".format(img_name)), depth_image)
-        cv2.imwrite(str(unproject_dir/"{}.png".format(img_name)), color_image)
+        Image.fromarray(depth_image*255).convert("I").save(str(depth_dir/"{}.png".format(img_name)))
+        # o3d.io.write_image(str(depth_dir/"{}.png".format(img_name)), depth_image)
+        o3d.io.write_image(str(unproject_dir/"{}.jpg".format(img_name)), color_image)
+        if debug:
+            print(np.array(depth_image))
+        # np.save(str(depth_dir/"depth_{}".format(img_name)), depth_image)
+        # cv2.imwrite(str(depth_dir/"{}.png".format(img_name)), depth_image)
+        # cv2.imwrite(str(unproject_dir/"{}.png".format(img_name)), color_image)
 
-        origin_image = cv2.imread(data_dir+"images/"+img_name_ext)
-        overlay_image = dark2alpha(color_image)
-        fusion_image = merge_image(origin_image, overlay_image, 0, 0)
+        # origin_image = cv2.imread(data_dir+"images/"+img_name_ext)
+        # overlay_image = dark2alpha(color_image)
+        # fusion_image = merge_image(origin_image, overlay_image, 0, 0)
 
-        cv2.imwrite(str(fusion_dir/"fusion_{}.png".format(img_name)), fusion_image)
-        
+        # cv2.imwrite(str(fusion_dir/"fusion_{}.png".format(img_name)), fusion_image)
+    return pcd, images, cameras
 ###############################################
 # Back to Point cloud
 ###############################################
@@ -175,17 +193,16 @@ if __name__ == "__main__":
         np.linalg.inv(images[image_idx]["extrinsic"]), 
         img_width, img_height)
 
-    depth_image = np.asarray(renderer_pc.render_to_depth_image())
-    color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
-    # depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
-    # depth_image = depth_image * 255
-    # np.save('depth', depth_image)
-    cv2.imwrite("depth.png", depth_image)
-    # cv2.imwrite("depth_view.png", depth_view)
-    cv2.imwrite("color.png", color_image)
+    depth_image = renderer_pc.render_to_depth_image()
+    color_image = renderer_pc.render_to_image()
 
-    origin_image = cv2.imread(data_dir+"images/"+images[image_idx]["name"])
-    overlay_image = dark2alpha(color_image)
-    fusion_image = merge_image(origin_image, overlay_image, 0, 0)
+    o3d.io.write_image("depth.png", depth_image)
+    o3d.io.write_image("color.png", color_image)
+    # depth = Image.fromarray(depth_image).convert("I")
+    # depth.save("depth.png")
+    # cv2.imwrite("color.png", color_image)
 
-    cv2.imwrite("fusion.png", fusion_image)
+    # origin_image = cv2.imread(data_dir+"images/"+images[image_idx]["name"])
+    # overlay_image = dark2alpha(color_image)
+    # fusion_image = merge_image(origin_image, overlay_image, 0, 0)
+    # cv2.imwrite("fusion.png", fusion_image)

@@ -1,4 +1,4 @@
-from distutils.command.clean import clean
+import cv2
 import os
 import sys
 import time
@@ -14,7 +14,7 @@ from unproject import unproject_fusion_mapping
 from midas_run import run as midas_run
 
 def run(args):
-    times = [0, 0, 0, 0, 0, 0]
+    times = [0 for _ in range(8)]
     input_dir = args.input
     output_dir = args.output
     data_type = args.image_type
@@ -32,7 +32,7 @@ def run(args):
         return
     parent_dir = os.path.basename(os.path.normpath(input_dir))
     if toClean:
-        os.system("find {}* | grep -v images | xargs rm -rf".format(input_dir))
+        os.system("find {}* | grep -v \"images|.mp4\" | xargs rm -rf".format(input_dir))
         os.system("rm -rf {}/{}".format(output_dir, parent_dir))
     
     Path("{}/{}".format(output_dir, parent_dir)).mkdir(parents=True, exist_ok=True)
@@ -40,42 +40,64 @@ def run(args):
     # start pipeline
     if int(enabled_module) <= 0:
         start_time = time.time()
+        print("\n\n=> Video frames slicing...")
+        Path("{}/images/".format(input_dir)).mkdir(parents=True, exist_ok=True)
+        video_path = sorted(glob.glob("{}/*.mp4".format(input_dir)))
+        print(video_path)
+        for v in video_path:
+            video_name = Path(v).stem
+            video = cv2.VideoCapture(v)
+            success, frame = video.read()
+            frame_idx = 0
+            while success:
+                cv2.imwrite("{}/images/{}_{:0>5}.jpg".format(input_dir, video_name, frame_idx), frame)
+                success, frame = video.read()
+                frame_idx += 1
+        times[0] = time.time() - start_time
+        print("====================================")
+        print("Video Frame sliced")
+        print("====================================")
+        print("- Video Frame sliced %s" % datetime.timedelta(seconds=times[0]))
+    
+    
+    if int(enabled_module) <= 1:
+        start_time = time.time()
         print("\n\n=> OpenSFM constructing...")
         os.system("cp {} {}/config.yaml".format( 
             "config_video_stream.yaml" if data_type == "frames" else "config_disparity.yaml", 
             input_dir))
         os.system("./opensfm_run_all {}".format(input_dir))
-        times[0] = time.time() - start_time
+        times[1] = time.time() - start_time
         print("====================================")
         print("OpenSFM construction")
         print("====================================")
-        print("- OpenSFM construction %s" % datetime.timedelta(seconds=times[0]))
+        print("- OpenSFM construction %s" % datetime.timedelta(seconds=times[1]))
         
-    if int(enabled_module) <= 1:
+    if int(enabled_module) <= 2:
         start_time = time.time()
         print("\n\n=> OpenMVS Densifying...")
         cwd = os.getcwd()
         os.chdir("{}/undistorted/openmvs/".format(input_dir))
         os.system("DensifyPointCloud scene.mvs")
         os.chdir(cwd)
-        times[1] = time.time() - start_time
+        times[2] = time.time() - start_time
         print("====================================")
         print("OpenMVS Densify")
         print("====================================")
-        print("- OpenMVS Densify     %s" % datetime.timedelta(seconds=times[1]))
+        print("- OpenMVS Densify     %s" % datetime.timedelta(seconds=times[2]))
         
-    if int(enabled_module) <= 2:
+    if int(enabled_module) <= 3:
         start_time = time.time()
         print("\n\n=> Unprojecting...")
         unproject_fusion_mapping(input_dir, False)
-        times[2] = time.time() - start_time
+        times[3] = time.time() - start_time
         print("====================================")
         print("Unproject")
         print("====================================")
-        print("- Unproject           %s" % datetime.timedelta(seconds=times[2]))
+        print("- Unproject           %s" % datetime.timedelta(seconds=times[3]))
         
         
-    if int(enabled_module) <= 3:
+    if int(enabled_module) <= 4:
         start_time = time.time()
         print("\n\n=> Midas Predicting...")
         default_models = {
@@ -89,26 +111,26 @@ def run(args):
         torch.backends.cudnn.benchmark = True
         
         Path("{}/relative_depth_predict".format(input_dir)).mkdir(parents=True, exist_ok=True)
-        midas_run(input_dir+"/unproject_fusion", 
+        midas_run(input_dir+"/undistorted/images", 
                 input_dir+"/relative_depth_predict", 
                 default_models[model_type], 
                 model_type, True)
-        times[3] = time.time() - start_time
-        print("====================================")
-        print("Midas Predict")
-        print("====================================")
-        print("- Midas Predict       %s" % datetime.timedelta(seconds=times[3]))
-
-    
-    if int(enabled_module) <= 4:
-        start_time = time.time()
-        print("\n\n=> Midas Predicting...")
-        
         times[4] = time.time() - start_time
         print("====================================")
         print("Midas Predict")
         print("====================================")
         print("- Midas Predict       %s" % datetime.timedelta(seconds=times[4]))
+
+    
+    if int(enabled_module) <= 5:
+        start_time = time.time()
+        print("\n\n=> Midas Predicting...")
+        
+        times[5] = time.time() - start_time
+        print("====================================")
+        print("Midas Predict")
+        print("====================================")
+        print("- Midas Predict       %s" % datetime.timedelta(seconds=times[5]))
 
 def str2bool(v):
     if isinstance(v, bool):

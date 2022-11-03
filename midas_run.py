@@ -8,6 +8,7 @@ import cv2
 import argparse
 import numpy as np
 
+from torchvision import transforms
 from torchvision.transforms import Compose
 from MiDaS.midas.dpt_depth import DPTDepthModel
 from MiDaS.midas.midas_net import MidasNet
@@ -30,7 +31,7 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
     print("device: %s" % device)
 
     # load network
-    if model_type == "dpt_large": # DPT-Large
+    if model_type == "dpt_large":  # DPT-Large
         model = DPTDepthModel(
             path=model_path,
             backbone="vitl16_384",
@@ -38,34 +39,38 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
         )
         net_w, net_h = 384, 384
         resize_mode = "minimal"
-        normalization = NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    elif model_type == "dpt_hybrid": #DPT-Hybrid
+        normalization = NormalizeImage(
+            mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    elif model_type == "dpt_hybrid":  # DPT-Hybrid
         model = DPTDepthModel(
             path=model_path,
             backbone="vitb_rn50_384",
             non_negative=True,
         )
         net_w, net_h = 384, 384
-        resize_mode="minimal"
-        normalization = NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        resize_mode = "minimal"
+        normalization = NormalizeImage(
+            mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     elif model_type == "midas_v21":
         model = MidasNet(model_path, non_negative=True)
         net_w, net_h = 384, 384
-        resize_mode="upper_bound"
+        resize_mode = "upper_bound"
         normalization = NormalizeImage(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
     elif model_type == "midas_v21_small":
-        model = MidasNet_small(model_path, features=64, backbone="efficientnet_lite3", exportable=True, non_negative=True, blocks={'expand': True})
+        model = MidasNet_small(model_path, features=64, backbone="efficientnet_lite3",
+                               exportable=True, non_negative=True, blocks={'expand': True})
         net_w, net_h = 256, 256
-        resize_mode="upper_bound"
+        resize_mode = "upper_bound"
         normalization = NormalizeImage(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
     else:
-        print(f"model_type '{model_type}' not implemented, use: --model_type large")
+        print(
+            f"model_type '{model_type}' not implemented, use: --model_type large")
         assert False
-    
+
     transform = Compose(
         [
             Resize(
@@ -83,21 +88,21 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
     )
 
     model.eval()
-    
-    if optimize==True:
+
+    if optimize == True:
         # rand_example = torch.rand(1, 3, net_h, net_w)
         # model(rand_example)
         # traced_script_module = torch.jit.trace(model, rand_example)
         # model = traced_script_module
-    
+
         if device == torch.device("cuda"):
-            model = model.to(memory_format=torch.channels_last)  
+            model = model.to(memory_format=torch.channels_last)
             model = model.half()
 
     model.to(device)
 
     # get input
-    img_names = glob.glob(os.path.join(input_path, "*"))
+    img_names = sorted(glob.glob(os.path.join(input_path, "*")))
     num_images = len(img_names)
 
     # create output folder
@@ -110,17 +115,24 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
         print("  processing {} ({}/{})".format(img_name, ind + 1, num_images))
 
         # input
-
         img = MiDaS.utils.read_image(img_name)
         img_input = transform({"image": img})["image"]
 
         # compute
         with torch.no_grad():
             sample = torch.from_numpy(img_input).to(device).unsqueeze(0)
-            if optimize==True and device == torch.device("cuda"):
-                sample = sample.to(memory_format=torch.channels_last)  
+            if optimize == True and device == torch.device("cuda"):
+                sample = sample.to(memory_format=torch.channels_last)
                 sample = sample.half()
             prediction = model.forward(sample)
+            # # visualize prediction tensor
+            # print(prediction)
+            # unloader = transforms.ToPILImage()
+            # image = prediction.cpu().clone()  # clone the tensor
+            # image = image.squeeze(0)  # remove the fake batch dimension
+            # image = unloader(image)
+            # image.save('example.jpg')
+
             prediction = (
                 torch.nn.functional.interpolate(
                     prediction.unsqueeze(1),
@@ -132,38 +144,36 @@ def run(input_path, output_path, model_path, model_type="large", optimize=True):
                 .cpu()
                 .numpy()
             )
-        # prediction = np.array([[ 255-pix if pix != 0 else 0 for pix in row] for row in prediction])
         # output
         filename = os.path.join(
             output_path, os.path.splitext(os.path.basename(img_name))[0]
         )
         MiDaS.utils.write_depth(filename, prediction, bits=2)
-
-    print("finished")
+    print("=> Finished")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-i', '--input_path', 
-        default='input',
-        help='folder with input images'
-    )
+    parser.add_argument('-i', '--input_path',
+                        default='input',
+                        help='folder with input images'
+                        )
 
-    parser.add_argument('-o', '--output_path', 
-        default='output',
-        help='folder for output images'
-    )
+    parser.add_argument('-o', '--output_path',
+                        default='output',
+                        help='folder for output images'
+                        )
 
-    parser.add_argument('-m', '--model_weights', 
-        default=None,
-        help='path to the trained weights of model'
-    )
+    parser.add_argument('-m', '--model_weights',
+                        default=None,
+                        help='path to the trained weights of model'
+                        )
 
-    parser.add_argument('-t', '--model_type', 
-        default='dpt_large',
-        help='model type: dpt_large, dpt_hybrid, midas_v21_large or midas_v21_small'
-    )
+    parser.add_argument('-t', '--model_type',
+                        default='dpt_large',
+                        help='model type: dpt_large, dpt_hybrid, midas_v21_large or midas_v21_small'
+                        )
 
     parser.add_argument('--optimize', dest='optimize', action='store_true')
     parser.add_argument('--no-optimize', dest='optimize', action='store_false')
@@ -186,4 +196,5 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
 
     # compute depth maps
-    run(args.input_path, args.output_path, args.model_weights, args.model_type, args.optimize)
+    run(args.input_path, args.output_path,
+        args.model_weights, args.model_type, args.optimize)
