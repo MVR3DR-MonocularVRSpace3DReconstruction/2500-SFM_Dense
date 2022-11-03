@@ -1,6 +1,7 @@
 import os
 import glob
 import cv2
+from PIL import Image
 import numpy as np
 from pathlib import Path
 import copy
@@ -10,17 +11,17 @@ def blockSampleFusion(estimate_block, o3d_block):
     print(estimate_block, "\n", o3d_block)
     assert estimate_block.size == o3d_block.size
     print(o3d_block.size)
-    output_block = o3d_block
+    output_block = copy.deepcopy(o3d_block)
     # get valid pixel in open3d block
     valid_pix = np.where(o3d_block != 0)
     # get the value of mapping valid pixel
     omapping_pix = o3d_block[valid_pix]
     emapping_pix = estimate_block[valid_pix]
     
-    cv2.imshow('image',estimate_block)
-    cv2.waitKey(0)
-    cv2.imshow('image',o3d_block)
-    cv2.waitKey(0)
+    # cv2.imshow('image',estimate_block)
+    # cv2.waitKey(0)
+    # cv2.imshow('image',o3d_block)
+    # cv2.waitKey(0)
     list_same = list(set(emapping_pix))
     # enum every estimate depth
     for source_depth in list_same:
@@ -34,12 +35,12 @@ def blockSampleFusion(estimate_block, o3d_block):
                          for row in range(o3d_block.shape[1])] for col in range(o3d_block.shape[0])])
         print("output block:\n", output_block)
         
-        cv2.imshow('image',output_block)
-        cv2.waitKey(0)
+        # cv2.imshow('image',output_block)
+        # cv2.waitKey(0)
 
         # print(output_block)
         # input()
-    return
+    return output_block
     
     
 def generateTrueDepth(data_dir, sizeof_sample_block = 32, valid_threshold = 0.3):
@@ -64,7 +65,7 @@ def generateTrueDepth(data_dir, sizeof_sample_block = 32, valid_threshold = 0.3)
     cv2.waitKey(0)
     # print(edepth,"\n", odepth)
     assert edepth.shape == odepth.shape
-    out = np.zeros(edepth.shape)
+    out = copy.deepcopy(odepth)
     block_counter = 0
     valid_block_counter = 0
     for pix_col in range(0, edepth.shape[0], sizeof_sample_block):
@@ -90,9 +91,11 @@ def generateTrueDepth(data_dir, sizeof_sample_block = 32, valid_threshold = 0.3)
     print("=> Total {} blocks, {} valid blocks, {:.3}% of Image Mended".format(
         block_counter, valid_block_counter, valid_block_counter/block_counter*100))
     # cv2.namedWindow('image', cv2.WINDOW_NORMAL)
-    cv2.imwrite('image.png',out)
-    cv2.imshow('image',out)
-    cv2.waitKey(0)
+    out = Image.fromarray(out).convert("I")
+    out.save("d.png")
+    # cv2.imwrite('d.png',out)
+    # cv2.imshow('image',out)
+    # cv2.waitKey(0)
 
 if __name__ == "__main__":
     data_dir = "inputs/sample/"

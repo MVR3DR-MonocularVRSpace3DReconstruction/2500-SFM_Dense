@@ -19,8 +19,16 @@ debug = True
 # Read Colmap & Point cloud
 ###############################################
 
-def init_colmap_pointcloud(data_dir, debug):
-    
+def init_colmap_pointcloud(data_dir, debug = False):
+    """read colmap file and densitied pointcloud return dictionary
+
+    Args:
+        data_dir (str): path of inputs
+        debug (bool, optional): visualize generated pointcloud and cameras. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
     pcd_path = data_dir+"undistorted/openmvs/scene_dense.ply"
     colmap_path = data_dir+"colmap_export"
     pcd = o3d.io.read_point_cloud(pcd_path)
@@ -38,7 +46,7 @@ def init_colmap_pointcloud(data_dir, debug):
         cameras[camera.camera_id] = dict_camera
         img_width, img_height = (camera.width, camera.height)
 
-    print("Intrinsic:\n", cameras[1]["intrinsic"])
+    # print("Intrinsic:\n", cameras[1]["intrinsic"])
     images = {}
     if debug:
         camera_linesets = []
@@ -52,13 +60,14 @@ def init_colmap_pointcloud(data_dir, debug):
         cam.paint_uniform_color([1.0, 0.0, 0.0])  # red
         
         dict_image["extrinsic"] = T
-        dict_image["name"] = image.name
+        dict_image["id"] = image.image_id
         dict_image["lineset"] = cam
         dict_image["cam_id"] = image.camera_id
-        images[image.image_id] = dict_image
+        images[image.name] = dict_image
         if debug:
             camera_linesets.append(cam)
     if debug:
+        print("=> Images:\n", images)
         o3d.visualization.draw_geometries([pcd, *camera_linesets])
         
     return pcd, images, cameras, img_width, img_height
@@ -120,26 +129,23 @@ def unproject_fusion_mapping(data_dir, debug):
     renderer_pc.scene.add_geometry("pcd", pcd, mat)
     for img_path in images_dir:
         
-        img_name = img_path.split("/")[-1]
-        print("=> Load image: {}".format(img_name))
-        img_idx = [ key for key, value in images.items() if value["name"] == img_name]
-        assert len(img_idx) == 1
-        img_idx = img_idx[0]
+        img_name_ext = img_path.split("/")[-1]
+        print("=> Load image: {}".format(img_name_ext))
         renderer_pc.setup_camera(
-            cameras[images[img_idx]["cam_id"]]["intrinsic"], 
-            np.linalg.inv(images[img_idx]["extrinsic"]), 
+            cameras[images[img_name_ext]["cam_id"]]["intrinsic"], 
+            np.linalg.inv(images[img_name_ext]["extrinsic"]), 
             img_width, img_height)
         
         depth_image = np.asarray(renderer_pc.render_to_depth_image(True))
         color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
         # depth_image = depth_image * 255
-        img_name = img_name.split(".")[0]
+        img_name = img_name_ext.split(".")[0]
         
         np.save(str(depth_dir/"depth_{}".format(img_name)), depth_image)
         cv2.imwrite(str(depth_dir/"{}.png".format(img_name)), depth_image)
         cv2.imwrite(str(unproject_dir/"{}.png".format(img_name)), color_image)
 
-        origin_image = cv2.imread(data_dir+"images/"+images[img_idx]["name"])
+        origin_image = cv2.imread(data_dir+"images/"+img_name_ext)
         overlay_image = dark2alpha(color_image)
         fusion_image = merge_image(origin_image, overlay_image, 0, 0)
 
@@ -171,11 +177,11 @@ if __name__ == "__main__":
 
     depth_image = np.asarray(renderer_pc.render_to_depth_image())
     color_image = np.asarray(renderer_pc.render_to_image())[:,:,::-1]
-    depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
+    # depth_view = (depth_image - depth_image.min()) / (depth_image.max() - depth_image.min()) * 255
     # depth_image = depth_image * 255
-    np.save('depth', depth_image)
+    # np.save('depth', depth_image)
     cv2.imwrite("depth.png", depth_image)
-    cv2.imwrite("depth_view.png", depth_view)
+    # cv2.imwrite("depth_view.png", depth_view)
     cv2.imwrite("color.png", color_image)
 
     origin_image = cv2.imread(data_dir+"images/"+images[image_idx]["name"])
