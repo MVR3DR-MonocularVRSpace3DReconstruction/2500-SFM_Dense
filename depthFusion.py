@@ -1,6 +1,5 @@
 import os
 import glob
-from statistics import mode
 import cv2
 from PIL import Image, ImageChops
 import numpy as np
@@ -139,8 +138,12 @@ def blockSampleFusionByRatio(estimate_block, o3d_block, debug = False):
     emapping = estimate_block[valid_pix]
     
     divide = omapping / emapping
-    e2o_ratio = np.average(divide[divide != np.inf])
-    output_block = estimate_block * e2o_ratio
+    divide = divide[divide != np.inf]
+    if len(divide) == 0:
+        return o3d_block
+    e2o_ratio = np.average(divide)
+    
+    output_block = (estimate_block * e2o_ratio).astype(np.uint16)
     if debug:
         print("estimate to original ratio: ", e2o_ratio)
         print("estimate mapping pixel:\n", emapping, "\noriginal mapping pixel:\n", omapping)
@@ -149,17 +152,17 @@ def blockSampleFusionByRatio(estimate_block, o3d_block, debug = False):
         print("Out image:\n", output_block)
 
     output_block = merge_image(output_block, o3d_block)
-    
     return output_block
     
-def generateTrueDepthByTotalMerge(data_dir, sizeof_sample_block = 128, valid_threshold = 0.3, debug = False):
+def generateTrueDepthByTotalMerge(data_dir, sizeof_sample_block = 128, valid_threshold = 0.2, debug = False):
     estimate_depth_dir = data_dir + "relative_depth_predict/"
     o3d_depth_dir = data_dir + "unproject_depth/"
     
     edepth_path = sorted(glob.glob(estimate_depth_dir+"*.png"))
     odepth_path = sorted(glob.glob(o3d_depth_dir+ "*.png"))
     
-    file_idx = 0
+    file_idx = 35
+    print("=> Mending depth {}".format(odepth_path[file_idx]))
     edepth_seq = Path(edepth_path[file_idx]).stem.split("_")[-1]
     odepth_seq = Path(odepth_path[file_idx]).stem.split("_")[-1]
     assert edepth_seq == odepth_seq
@@ -182,6 +185,18 @@ def generateTrueDepthByTotalMerge(data_dir, sizeof_sample_block = 128, valid_thr
     assert edepth.shape == odepth.shape
     edepth = np.array(edepth, dtype = "uint16") * 255 
     
+    valid_pix = np.where(odepth != 0)
+    omap = odepth[valid_pix]
+    emap = edepth[valid_pix]
+    odepthmap_range = [np.min(odepth), np.max(odepth)]
+    edepthmap_range = [np.min(edepth), np.max(edepth)]
+    edepth = ((edepth - edepthmap_range[0]) * ((odepthmap_range[1]-odepthmap_range[0])/(edepthmap_range[1]-edepthmap_range[0]))).astype(np.uint16)
+    if debug:
+        print(edepth)
+        cv2.imshow('image',edepth)
+        cv2.waitKey(0)
+
+    # print(odepth_range)
     out = copy.deepcopy(odepth)
     block_counter = 0
     valid_block_counter = 0
@@ -214,21 +229,25 @@ def generateTrueDepthByTotalMerge(data_dir, sizeof_sample_block = 128, valid_thr
 # Edge detection Method
 ###############################################
   
-def generateTrueDepthByEdgeDetect(data_dir, debug = False):
+def generateTrueDepthByEdgeDetect(data_dir, valid_point_threshold = 10, debug = False):
     estimate_depth_dir = data_dir + "relative_depth_predict/"
     o3d_depth_dir = data_dir + "unproject_depth/"
+    image_dir = data_dir + "undistorted/images/"
     
     edepth_path = sorted(glob.glob(estimate_depth_dir+"*.png"))
     odepth_path = sorted(glob.glob(o3d_depth_dir+ "*.png"))
+    image_path = sorted(glob.glob(image_dir+"*.jpg"))
     
     file_idx = 0
     edepth_seq = Path(edepth_path[file_idx]).stem.split("_")[-1]
     odepth_seq = Path(odepth_path[file_idx]).stem.split("_")[-1]
-    assert edepth_seq == odepth_seq
+    image_seq = Path(image_path[file_idx]).stem
+    assert edepth_seq == odepth_seq == image_seq
 
     edepth = cv2.imread(edepth_path[file_idx], cv2.IMREAD_GRAYSCALE) # , cv2.IMREAD_GRAYSCALE
     edepth = cv2.bitwise_not(edepth)
     odepth = cv2.imread(odepth_path[file_idx], cv2.IMREAD_UNCHANGED) # , cv2.IMREAD_GRAYSCALE
+    image = cv2.imread(image_path[file_idx], cv2.IMREAD_UNCHANGED)
     
     if debug:
         cv2.namedWindow('image', cv2.WINDOW_NORMAL)
@@ -245,16 +264,36 @@ def generateTrueDepthByEdgeDetect(data_dir, debug = False):
     
     copy_edepth = np.uint8(edepth)
     edepth = np.array(edepth, dtype = "uint16") * 255 
+    planes = np.load("m.npy")
+    # print(planes)
+    for plane in planes:
+        plane = np.squeeze(plane, axis=(2,)).astype(np.uint8) * 255
+        plane = cv2.resize(plane, (odepth.shape[1], odepth.shape[0]), interpolation=cv2.INTER_AREA) # , 
+        
+        mask = np.where(plane != 255)
+        # Image.fromarray(plane).show()
+        odepth_slice = copy.deepcopy(odepth)
+        odepth_slice[mask] = 0
+        
+        if debug:
+            cv2.imshow('image',plane)
+            cv2.waitKey(0)
+            cv2.imshow('image',odepth_slice)
+            cv2.waitKey(0)
+        
+            image_slice = copy.deepcopy(image)
+            image_slice[mask] = 0
+            cv2.imshow('image',image_slice)
+            cv2.waitKey(0)
+            print(odepth_slice[odepth_slice != 0])
+            
+        if len(odepth_slice[odepth_slice != 0]) < valid_point_threshold:
+            print("=> odepth_slice do not have enought points:\n", odepth_slice[odepth_slice != 0])
+            continue
 
-    # imgray = cv2.cvtColor(copy_edepth,cv2.COLOR_BGR2GRAY)
-    ret,thresh=cv2.threshold(copy_edepth,120,130,0)
-    contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+        
+
     
-    copy_edepth=cv2.drawContours(copy_edepth,contours,-1,(0,255,0),5)  # img为三通道才能显示轮廓
-    cv2.imshow('image',copy_edepth)
-    cv2.waitKey(0)
-
-
     out = copy.deepcopy(odepth)
     
     out = Image.fromarray(out).convert("I")
@@ -263,4 +302,4 @@ def generateTrueDepthByEdgeDetect(data_dir, debug = False):
 
 if __name__ == "__main__":
     data_dir = "inputs/sample/"
-    generateTrueDepthByTotalMerge(data_dir, debug=True)
+    generateTrueDepthByEdgeDetect(data_dir, debug=True)

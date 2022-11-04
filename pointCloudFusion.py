@@ -47,5 +47,5 @@ scene, images, cameras, img_width, img_height = init_colmap_pointcloud("inputs/s
 
 pcd = generate_point_cloud("c.jpg", "d.png", cameras[images["91730.jpg"]["cam_id"]]["intrinsic"])
 pcdo = generate_point_cloud("c.jpg", "a.png", cameras[images["91730.jpg"]["cam_id"]]["intrinsic"])
-pcd.paint_uniform_color([1,0,0])
+# pcd.paint_uniform_color([1,0,0])
 o3d.visualization.draw_geometries([pcd, pcdo])
