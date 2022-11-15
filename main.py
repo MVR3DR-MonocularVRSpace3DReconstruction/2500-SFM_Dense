@@ -2,8 +2,9 @@ import cv2
 import os
 import sys
 import time
-import torch
+# import torch
 import datetime
+import random
 
 import copy
 import glob
@@ -12,7 +13,8 @@ from pathlib import Path
 import argparse
 
 from unproject import unproject_fusion_mapping
-from midas_run import run as midas_run
+from anchorRegistration import anchorRegistration
+# from midas_run import run as midas_run
 
 def pipeline(args):
     times = [0 for _ in range(8)]
@@ -74,41 +76,41 @@ def pipeline(args):
         print("====================================")
         print("- Unproject           %s" % datetime.timedelta(seconds=times[2]))
         
+    
+    # if enabled_module <= 3:
+    #     start_time = time.time()
+    #     print("\n\n=> Midas Predicting...")
+    #     default_models = {
+    #         "midas_v21_small": "MiDaS/weights/midas_v21_small-70d6b9c8.pt",
+    #         "midas_v21": "MiDaS/weights/midas_v21-f6b98070.pt",
+    #         "dpt_large": "MiDaS/weights/dpt_large-midas-2f21e586.pt",
+    #         "dpt_hybrid": "MiDaS/weights/dpt_hybrid-midas-501f0c75.pt",
+    #     }
+    #     # set torch options
+    #     torch.backends.cudnn.enabled = True
+    #     torch.backends.cudnn.benchmark = True
         
-    if enabled_module <= 3:
-        start_time = time.time()
-        print("\n\n=> Midas Predicting...")
-        default_models = {
-            "midas_v21_small": "MiDaS/weights/midas_v21_small-70d6b9c8.pt",
-            "midas_v21": "MiDaS/weights/midas_v21-f6b98070.pt",
-            "dpt_large": "MiDaS/weights/dpt_large-midas-2f21e586.pt",
-            "dpt_hybrid": "MiDaS/weights/dpt_hybrid-midas-501f0c75.pt",
-        }
-        # set torch options
-        torch.backends.cudnn.enabled = True
-        torch.backends.cudnn.benchmark = True
-        
-        Path("{}/relative_depth_predict".format(input_dir)).mkdir(parents=True, exist_ok=True)
-        midas_run(input_dir+"/undistorted/images", 
-                input_dir+"/relative_depth_predict", 
-                default_models[model_type], 
-                model_type, True)
-        times[3] = time.time() - start_time
-        print("====================================")
-        print("Midas Predict")
-        print("====================================")
-        print("- Midas Predict       %s" % datetime.timedelta(seconds=times[3]))
+    #     Path("{}/relative_depth_predict".format(input_dir)).mkdir(parents=True, exist_ok=True)
+    #     midas_run(input_dir+"/undistorted/images", 
+    #             input_dir+"/relative_depth_predict", 
+    #             default_models[model_type], 
+    #             model_type, True)
+    #     times[3] = time.time() - start_time
+    #     print("====================================")
+    #     print("Midas Predict")
+    #     print("====================================")
+    #     print("- Midas Predict       %s" % datetime.timedelta(seconds=times[3]))
 
     
-    if enabled_module <= 4:
-        start_time = time.time()
-        print("\n\n=> Midas Predicting...")
+    # if enabled_module <= 4:
+    #     start_time = time.time()
+    #     print("\n\n=> Midas Predicting...")
         
-        times[4] = time.time() - start_time
-        print("====================================")
-        print("Midas Predict")
-        print("====================================")
-        print("- Midas Predict       %s" % datetime.timedelta(seconds=times[4]))
+    #     times[4] = time.time() - start_time
+    #     print("====================================")
+    #     print("Midas Predict")
+    #     print("====================================")
+    #     print("- Midas Predict       %s" % datetime.timedelta(seconds=times[4]))
 
 
 def run(args):
@@ -120,40 +122,54 @@ def run(args):
     toClean = args.clean
     sample_rate = args.sample_rate
     process_sample_rate = args.process_sample_rate
-    
+    anchor_amount = args.anchor_amount
     if data_type == "disparity":
         pipeline(args)
     if data_type == "frames":
-        
+        # Clean up
         if toClean:
             os.system("find {}* | grep -v -i -E \"images|.mp4\" | xargs rm -rf".format(input_dir))
             parent_dir = os.path.basename(os.path.normpath(input_dir))
             os.system("rm -rf {}/{}".format(output_dir, parent_dir))
-            
+        # if only process frame once = 0 -> range Step = process amount     
         if process_sample_rate == 0: process_sample_rate = sample_rate
-        
+        # mkdir for subprocess
         for sub_process in range(0, sample_rate, process_sample_rate):
             Path("{}/{}/images/".format(input_dir, sub_process)).mkdir(parents=True, exist_ok=True)
-            
+        
+        # Load Video
         print("\n\n=> Video frames slicing...")    
         video_path = sorted(glob.glob("{}/*.mp4".format(input_dir)))
         print(video_path[0])
         assert len(video_path) == 1
-
+        # Save frames to path/images/
         video = cv2.VideoCapture(video_path[0])
         success, frame = video.read()
         frame_idx = 0
+        Path("{}/images/".format(input_dir)).mkdir(parents=True, exist_ok=True)
         while success:
-            print("{}/{}/images/{:0>5}.jpg".format(input_dir, frame_idx%sample_rate, frame_idx))
-            cv2.imwrite("{}/{}/images/{:0>5}.jpg".format(input_dir, frame_idx%sample_rate, frame_idx), frame)
+            print("{}/images/{:0>5}.jpg".format(input_dir, frame_idx))
+            cv2.imwrite("{}/images/{:0>5}.jpg".format(input_dir, frame_idx), frame)
             success, frame = video.read()
             frame_idx += 1
-            
+        
+        # Prepare Anchor Frames for every subprocess
+        frames = sorted(glob.glob("{}/images/*.jpg".format(input_dir)))
+        anchors = random.sample(frames, anchor_amount)
+        # Copy frames to different subprocess dir
+        for sub_process in range(0, sample_rate, process_sample_rate):
+            for idx in range(sub_process, len(frames), sample_rate):
+                os.system("cp {0} {1}/{2}/images/".format(frames[idx], input_dir, sub_process))
+            for anchor in anchors:
+                os.system("cp {0} {1}/{2}/images/".format(anchor, input_dir, sub_process))
+        
+        # Start pipelines
         for sub_process in range(0, sample_rate, process_sample_rate):
             sub_args = copy.deepcopy(args)
             sub_args.input = input_dir+"{}/".format(sub_process)
             pipeline(sub_args)
     
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -186,6 +202,10 @@ if __name__ == "__main__":
                         help="used in \"frames\" type, process sample rate every n batch\n// ps=0 only process once",
                         default=0)
     
+    parser.add_argument("-aa", "--anchor_amount", type=int,
+                        help="Every subprocess have same anchors which can provide fast registration after densify point cloud",
+                        default=8)
+    
     parser.add_argument("-p", "--pipelines", type=int,
                         help="use number 0~4 to select start modules\
                             [0: OpenSFM] [1: OpenMVS] [2: Unproject]\
@@ -202,7 +222,7 @@ if __name__ == "__main__":
         choices=['midas_v21_small', 'midas_v21', "dpt_large", "dpt_hybrid"],
         help='model type: dpt_large, dpt_hybrid, midas_v21_large or midas_v21_small',
     )
-    
+
     args = parser.parse_args()
     
     run(args)

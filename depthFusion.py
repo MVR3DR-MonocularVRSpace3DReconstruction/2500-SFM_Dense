@@ -5,7 +5,10 @@ from PIL import Image, ImageChops
 import numpy as np
 from pathlib import Path
 import copy
+import open3d as o3d
 
+from planeDetect import ransac_plane_detection, ransac_planefit
+from unproject import init_colmap_pointcloud
 ###############################################
 # Block Sample Method
 ###############################################
@@ -228,8 +231,29 @@ def generateTrueDepthByTotalMerge(data_dir, sizeof_sample_block = 128, valid_thr
 ###############################################
 # Edge detection Method
 ###############################################
+
+def getPointCloudFromRGBDImage(color, depth, intrinsic, debug):
+    color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
+    color = o3d.geometry.Image(color)
+    depth = o3d.geometry.Image(depth)
+    rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
+        color, depth, depth_trunc=1000, convert_rgb_to_intensity = False)
+    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
+        rgbd, intrinsic, np.identity(4))
+    pcd.voxel_down_sample(0.05)
+    pcd, idx = pcd.remove_radius_outlier(nb_points=16, radius=0.05)
+    pcd = pcd.select_by_index(idx)
+    box = pcd.get_oriented_bounding_box()
+    box.color = [1, 0, 0]
+    if debug:
+        o3d.visualization.draw_geometries([pcd, box])
+
+    return pcd
   
-def generateTrueDepthByEdgeDetect(data_dir, valid_point_threshold = 10, debug = False):
+def generateTrueDepthByEdgeDetect(data_dir, 
+        valid_point_threshold_ratio = 0.1, 
+        ransac_n = 3, max_dst = 5, max_trials=1000, stop_inliers_ratio=1.0,  debug = False):
+    # create/save/link/read dirs
     estimate_depth_dir = data_dir + "relative_depth_predict/"
     o3d_depth_dir = data_dir + "unproject_depth/"
     image_dir = data_dir + "undistorted/images/"
@@ -244,6 +268,7 @@ def generateTrueDepthByEdgeDetect(data_dir, valid_point_threshold = 10, debug = 
     image_seq = Path(image_path[file_idx]).stem
     assert edepth_seq == odepth_seq == image_seq
 
+    # read images
     edepth = cv2.imread(edepth_path[file_idx], cv2.IMREAD_GRAYSCALE) # , cv2.IMREAD_GRAYSCALE
     edepth = cv2.bitwise_not(edepth)
     odepth = cv2.imread(odepth_path[file_idx], cv2.IMREAD_UNCHANGED) # , cv2.IMREAD_GRAYSCALE
@@ -255,45 +280,53 @@ def generateTrueDepthByEdgeDetect(data_dir, valid_point_threshold = 10, debug = 
         cv2.waitKey(0)
         cv2.imshow('image',odepth)
         cv2.waitKey(0)
-
-        print("estimate depth: \n", edepth,"\n\noriginal depth: \n", odepth)
-        print("\nestimate depth type: {}, min: {}, max: {}".format(edepth.dtype, np.min(edepth), np.max(edepth)))
-        print("origin depth type: {}, min: {}, max: {}".format(odepth.dtype, np.min(odepth), np.max(odepth)))
-        print("="*50+"\n\n")
     assert edepth.shape == odepth.shape
     
     copy_edepth = np.uint8(edepth)
     edepth = np.array(edepth, dtype = "uint16") * 255 
+    
+    # read detected planes
     planes = np.load("m.npy")
+    scene, images, cameras, img_width, img_height = init_colmap_pointcloud("inputs/sample/", False)
     # print(planes)
+    # iterate planes and slice it from origin depth and colors
     for plane in planes:
         plane = np.squeeze(plane, axis=(2,)).astype(np.uint8) * 255
         plane = cv2.resize(plane, (odepth.shape[1], odepth.shape[0]), interpolation=cv2.INTER_AREA) # , 
-        
+        # create mask from plane params
         mask = np.where(plane != 255)
         # Image.fromarray(plane).show()
+        # set covered area into black-0
         odepth_slice = copy.deepcopy(odepth)
         odepth_slice[mask] = 0
+        image_slice = copy.deepcopy(image)
+        image_slice[mask] = 0
+        
+        # Next mask If out of valid range
+        valid_point_threshold = image.shape[0] * image.shape[1] * valid_point_threshold_ratio
+        # print(len(image_slice[image_slice != 0]),  valid_point_threshold)
+        if len(image_slice[image_slice != 0]) < valid_point_threshold:
+            print("=> odepth_slice do not have enought points:", len(image_slice[image_slice != 0]))
+            continue
+        
         
         if debug:
             cv2.imshow('image',plane)
             cv2.waitKey(0)
             cv2.imshow('image',odepth_slice)
             cv2.waitKey(0)
-        
-            image_slice = copy.deepcopy(image)
-            image_slice[mask] = 0
             cv2.imshow('image',image_slice)
             cv2.waitKey(0)
-            print(odepth_slice[odepth_slice != 0])
-            
-        if len(odepth_slice[odepth_slice != 0]) < valid_point_threshold:
-            print("=> odepth_slice do not have enought points:\n", odepth_slice[odepth_slice != 0])
-            continue
-
+            # print(odepth_slice[odepth_slice != 0])
         
+        # create point cloud from color and depth
+        intrinsic = o3d.camera.PinholeCameraIntrinsic()
+        intrinsic.intrinsic_matrix = cameras[images[image_seq+".jpg"]["cam_id"]]["intrinsic"]
+        pcd = getPointCloudFromRGBDImage(image_slice, odepth_slice, intrinsic, debug)
+        # best_plane_params, pts_inliers, pts_outliers = ransac_planefit(
+        #     np.array(pcd.points), ransac_n, max_dst, max_trials=max_trials, stop_inliers_ratio=stop_inliers_ratio)
+        # print("Best Plane Params: ", best_plane_params)
 
-    
     out = copy.deepcopy(odepth)
     
     out = Image.fromarray(out).convert("I")

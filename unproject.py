@@ -14,8 +14,6 @@ from pathlib import Path
 from PIL import Image
 import rtvec2extrinsic
 
-
-debug = True
 ###############################################
 # Read Colmap & Point cloud
 ###############################################
