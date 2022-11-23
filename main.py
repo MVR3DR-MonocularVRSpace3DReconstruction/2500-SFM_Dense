@@ -13,6 +13,7 @@ from pathlib import Path
 import argparse
 
 from unproject import unproject_fusion_mapping
+from getDataPathList import createPathFile
 from anchorRegistration import anchorRegistration
 # from midas_run import run as midas_run
 
@@ -21,7 +22,6 @@ def pipeline(args):
     input_dir = args.input
     output_dir = args.output
     data_type = args.image_type
-    model_type = args.model_type
     enabled_module = args.pipelines
     toClean = args.clean
     sample_rate = args.sample_rate
@@ -70,6 +70,7 @@ def pipeline(args):
         start_time = time.time()
         print("\n\n=> Unprojecting...")
         unproject_fusion_mapping(input_dir, False)
+        createPathFile(input_dir)
         times[2] = time.time() - start_time
         print("====================================")
         print("Unproject")
@@ -77,47 +78,32 @@ def pipeline(args):
         print("- Unproject           %s" % datetime.timedelta(seconds=times[2]))
         
     
-    # if enabled_module <= 3:
-    #     start_time = time.time()
-    #     print("\n\n=> Midas Predicting...")
-    #     default_models = {
-    #         "midas_v21_small": "MiDaS/weights/midas_v21_small-70d6b9c8.pt",
-    #         "midas_v21": "MiDaS/weights/midas_v21-f6b98070.pt",
-    #         "dpt_large": "MiDaS/weights/dpt_large-midas-2f21e586.pt",
-    #         "dpt_hybrid": "MiDaS/weights/dpt_hybrid-midas-501f0c75.pt",
-    #     }
-    #     # set torch options
-    #     torch.backends.cudnn.enabled = True
-    #     torch.backends.cudnn.benchmark = True
-        
-    #     Path("{}/relative_depth_predict".format(input_dir)).mkdir(parents=True, exist_ok=True)
-    #     midas_run(input_dir+"/undistorted/images", 
-    #             input_dir+"/relative_depth_predict", 
-    #             default_models[model_type], 
-    #             model_type, True)
-    #     times[3] = time.time() - start_time
-    #     print("====================================")
-    #     print("Midas Predict")
-    #     print("====================================")
-    #     print("- Midas Predict       %s" % datetime.timedelta(seconds=times[3]))
+    if enabled_module <= 3:
+        start_time = time.time()
+        print("\n\n=> Depth Completion...")
+        os.system("bash run_mondi_custom.sh")
+        times[3] = time.time() - start_time
+        print("====================================")
+        print("Depth Completion")
+        print("====================================")
+        print("- Depth Completion    %s" % datetime.timedelta(seconds=times[3]))
 
     
     # if enabled_module <= 4:
     #     start_time = time.time()
-    #     print("\n\n=> Midas Predicting...")
+    #     print("\n\n=> Depth Completioning...")
         
     #     times[4] = time.time() - start_time
     #     print("====================================")
-    #     print("Midas Predict")
+    #     print("Depth Completion")
     #     print("====================================")
-    #     print("- Midas Predict       %s" % datetime.timedelta(seconds=times[4]))
+    #     print("- Depth Completion       %s" % datetime.timedelta(seconds=times[4]))
 
 
 def run(args):
     input_dir = args.input
     output_dir = args.output
     data_type = args.image_type
-    model_type = args.model_type
     enabled_module = args.pipelines
     toClean = args.clean
     sample_rate = args.sample_rate
@@ -209,7 +195,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--pipelines", type=int,
                         help="use number 0~4 to select start modules\
                             [0: OpenSFM] [1: OpenMVS] [2: Unproject]\
-                            [3: Midas] [4: Patch PointCloud]",
+                            [3: Depth Completion] [4: Patch PointCloud]",
                         choices=[idx for idx in range(5)],
                         default=0)
     
@@ -217,12 +203,6 @@ if __name__ == "__main__":
                         const=True, default=False,
                         help="Clean up directory when init second time")
     
-    parser.add_argument('-mt', '--model_type', 
-        default='dpt_large',
-        choices=['midas_v21_small', 'midas_v21', "dpt_large", "dpt_hybrid"],
-        help='model type: dpt_large, dpt_hybrid, midas_v21_large or midas_v21_small',
-    )
-
     args = parser.parse_args()
     
     run(args)

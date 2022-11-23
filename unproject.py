@@ -1,19 +1,16 @@
-import cv2
-from PIL import Image
-import os
-import json
-import math
+
 import glob
 import numpy as np
 from copy import deepcopy
+from pathlib import Path
+
 import open3d as o3d
 import pycolmap
 
-from pathlib import Path
-# import matplotlib.pyplot as plt
+import cv2
 from PIL import Image
-import rtvec2extrinsic
 
+import json
 ###############################################
 # Read Colmap & Point cloud
 ###############################################
@@ -123,14 +120,22 @@ def unproject_fusion_mapping(data_dir, debug):
     # fusion_dir = Path("{}/unproject_fusion".format(data_dir))
     depth_dir = Path("{}/unproject_depth".format(data_dir))
     unproject_dir = Path("{}/unproject_colors".format(data_dir))
+    intrinsic_dir = Path("{}/camera_intrinsic".format(data_dir))
     # fusion_dir.mkdir(parents=True, exist_ok=True)
     depth_dir.mkdir(parents=True, exist_ok=True)
     unproject_dir.mkdir(parents=True, exist_ok=True)
+    intrinsic_dir.mkdir(parents=True, exist_ok=True)
 
     images_dir = sorted(glob.glob(data_dir+"/undistorted/images/*.jpg"))
     
     pcd, images, cameras, img_width, img_height = init_colmap_pointcloud(data_dir, debug)
-    
+    # export cameras data
+    # print(cameras)
+    for camera in cameras.keys():
+        # print(camera, cameras[camera]["intrinsic"])
+        with open( str(intrinsic_dir/(str(camera)+'.npy')), 'wb') as f:
+            np.save(f, cameras[camera]["intrinsic"])
+    # create 3d renderer
     mat = o3d.visualization.rendering.MaterialRecord()
     mat.shader = 'defaultUnlit'
     renderer_pc = o3d.visualization.rendering.OffscreenRenderer(img_width, img_height)
