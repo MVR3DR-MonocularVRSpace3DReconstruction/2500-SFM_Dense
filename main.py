@@ -31,11 +31,11 @@ def pipeline(args):
         return
     
     # make file clean
-    if toClean and enabled_module > 0:
-        print("=> You can not run the following procedure after clean up~")
-        return
     parent_dir = os.path.basename(os.path.normpath(input_dir))
     if toClean:
+        if enabled_module > 0:
+            print("=> You can not run the following procedure after clean up~")
+            return
         os.system("find {}* | grep -v -i -E \"images|.mp4\" | xargs rm -rf".format(input_dir))
         os.system("rm -rf {}/{}".format(output_dir, parent_dir))
     
@@ -46,6 +46,7 @@ def pipeline(args):
         start_time = time.time()
         print("\n\n=> OpenSFM constructing...")
         os.system("cp {} {}/config.yaml".format("config_disparity.yaml", input_dir))
+        os.system("cp {} {}/camera_models_overrides.json".format("camera_models.json", input_dir))
         os.system("./opensfm_run_all {}".format(input_dir))
         times[0] = time.time() - start_time
         print("====================================")
@@ -81,7 +82,7 @@ def pipeline(args):
     if enabled_module <= 3:
         start_time = time.time()
         print("\n\n=> Depth Completion...")
-        os.system("bash run_mondi_custom.sh")
+        os.system("bash run_mondi_custom.sh {}".format(input_dir))
         times[3] = time.time() - start_time
         print("====================================")
         print("Depth Completion")

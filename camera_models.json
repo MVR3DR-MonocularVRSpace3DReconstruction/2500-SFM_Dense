@@ -1,0 +1,10 @@
+{
+    "all": {
+        "projection_type": "perspective",
+        "width": 4000,
+        "height": 3000,
+        "focal": 0.8,
+        "k1": 0.0,
+        "k2": 0.0
+    }
+}

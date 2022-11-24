@@ -1,0 +1,92 @@
+Input paths:
+inputs/lab_v3//custom_image.txt
+inputs/lab_v3//custom_depth.txt
+inputs/lab_v3//custom_intrinsic.txt
+
+Input settings:
+input_types=['image', 'sparse_depth', 'validity_map']
+input_channels_image=3  input_channels_depth=2
+normalized_image_range=[0.0, 1.0]
+outlier_removal_kernel_size=7  outlier_removal_threshold=1.50
+
+Sparse to dense pooling settings:
+min_pool_sizes_sparse_to_dense_pool=[15, 17, 19, 21, 23]
+max_pool_sizes_sparse_to_dense_pool=[27, 29]
+n_convolution_sparse_to_dense_pool=3
+n_filter_sparse_to_dense_pool=8
+
+Depth network settings:
+encoder_type=['kbnet']
+n_filters_encoder_image=[48, 96, 192, 384, 384]
+n_filters_encoder_depth=[16, 32, 64, 128, 128]
+n_convolutions_encoder=[1, 1, 1, 2, 2]
+resolutions_backprojection=[0, 1, 2, 3]
+resolutions_depthwise_separable_encoder=[4, 5]
+decoder_type=['kbnet']
+n_filters_decoder=[256, 128, 128, 64, 12]  n_resolution_decoder=1
+deconv_type=up
+resolutions_depthwise_separable_decoder=[-1]
+min_predict_depth=0.00  max_predict_depth=20.00
+
+Weight settings:
+n_parameter=5332463  n_parameter_depth=5332463
+weight_initializer=xavier_normal  activation_func=leaky_relu
+
+Evaluation settings:
+min_evaluate_depth=0.00  max_evaluate_depth=20.00
+
+Checkpoint settings:
+checkpoint_path=trained_kbnet
+
+depth_model_restore_path=modi-python/pretrained_models/kitti/mondi-kitti.pth
+
+Hardware settings:
+device=cuda
+n_thread=1
+
+Input paths:
+inputs/lab_v3//custom_image.txt
+inputs/lab_v3//custom_depth.txt
+inputs/lab_v3//custom_intrinsic.txt
+
+Input settings:
+input_types=['image', 'sparse_depth', 'validity_map']
+input_channels_image=3  input_channels_depth=2
+normalized_image_range=[0.0, 1.0]
+outlier_removal_kernel_size=7  outlier_removal_threshold=1.50
+
+Sparse to dense pooling settings:
+min_pool_sizes_sparse_to_dense_pool=[15, 17, 19, 21, 23]
+max_pool_sizes_sparse_to_dense_pool=[27, 29]
+n_convolution_sparse_to_dense_pool=3
+n_filter_sparse_to_dense_pool=8
+
+Depth network settings:
+encoder_type=['kbnet']
+n_filters_encoder_image=[48, 96, 192, 384, 384]
+n_filters_encoder_depth=[16, 32, 64, 128, 128]
+n_convolutions_encoder=[1, 1, 1, 2, 2]
+resolutions_backprojection=[0, 1, 2, 3]
+resolutions_depthwise_separable_encoder=[4, 5]
+decoder_type=['kbnet']
+n_filters_decoder=[256, 128, 128, 64, 12]  n_resolution_decoder=1
+deconv_type=up
+resolutions_depthwise_separable_decoder=[-1]
+min_predict_depth=0.00  max_predict_depth=20.00
+
+Weight settings:
+n_parameter=5332463  n_parameter_depth=5332463
+weight_initializer=xavier_normal  activation_func=leaky_relu
+
+Evaluation settings:
+min_evaluate_depth=0.00  max_evaluate_depth=20.00
+
+Checkpoint settings:
+checkpoint_path=trained_kbnet
+
+depth_model_restore_path=modi-python/pretrained_models/kitti/mondi-kitti.pth
+
+Hardware settings:
+device=cuda
+n_thread=1
+

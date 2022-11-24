@@ -179,33 +179,49 @@ def unproject_fusion_mapping(data_dir, debug):
 
 
 if __name__ == "__main__":
-    data_dir = "inputs/sample/"
-    image_idx = 35
+    data_dir = "inputs/lab_v3/"
+    images_name = Path(sorted(glob.glob(data_dir+"undistorted/images/*.jpg"))[0]).name
     
     pcd, images, cameras, img_width, img_height = init_colmap_pointcloud(data_dir, True)
-    
-    print("Image file: ", images[image_idx]["name"])
+    print(img_width, img_height)
+    # img_width = 1600
+    # img_height = 1200
+    print("Image file: ", images_name)
     mat = o3d.visualization.rendering.MaterialRecord()
     mat.shader = 'defaultUnlit'
+    print(cameras[images[images_name]["cam_id"]]["intrinsic"])
+
+    intri = np.array([[3000,0,2000],
+                      [0,3000,1500],
+                      [0,0,1]])
 
     renderer_pc = o3d.visualization.rendering.OffscreenRenderer(img_width, img_height)
     renderer_pc.scene.set_background(np.array([0, 0, 0, 0]))
     renderer_pc.scene.add_geometry("pcd", pcd, mat)
     renderer_pc.setup_camera(
-        cameras[images[image_idx]["cam_id"]]["intrinsic"], 
-        np.linalg.inv(images[image_idx]["extrinsic"]), 
+        # cameras[images[images_name]["cam_id"]]["intrinsic"], 
+        intri,
+        np.linalg.inv(images[images_name]["extrinsic"]), 
         img_width, img_height)
 
-    depth_image = renderer_pc.render_to_depth_image()
+    depth_image = renderer_pc.render_to_depth_image(True)
     color_image = renderer_pc.render_to_image()
-
-    o3d.io.write_image("depth.png", depth_image)
+    depth_image = np.array(depth_image)
+    Image.fromarray(depth_image*255).convert("I").save("depth.png")
+    # o3d.io.write_image("depth.png", depth_image)
     o3d.io.write_image("color.png", color_image)
-    # depth = Image.fromarray(depth_image).convert("I")
-    # depth.save("depth.png")
-    # cv2.imwrite("color.png", color_image)
 
-    # origin_image = cv2.imread(data_dir+"images/"+images[image_idx]["name"])
-    # overlay_image = dark2alpha(color_image)
-    # fusion_image = merge_image(origin_image, overlay_image, 0, 0)
-    # cv2.imwrite("fusion.png", fusion_image)
+    color_img = Image.open(sorted(glob.glob(data_dir+"images/*.jpg"))[0])
+    import matplotlib.pyplot as plt
+    plt.subplot(1, 3, 1)
+    plt.title(' color image')
+    plt.imshow(color_img)
+    plt.subplot(1, 3, 2)
+    plt.title(' unproject color image')
+    color = plt.imread("color.png")
+    depth = plt.imread("depth.png")
+    plt.imshow(color)
+    plt.subplot(1, 3, 3)
+    plt.title(' depth image')
+    plt.imshow(depth)
+    plt.show()
